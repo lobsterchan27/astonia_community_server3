@@ -22,6 +22,15 @@ export AS3_DBUSER="${AS3_DBUSER:-root}"
 export AS3_DBPASS="${AS3_DBPASS:-astonia}"
 export AS3_DBNAME="${AS3_DBNAME:-merc}"
 export AS3_CHATHOST="${AS3_CHATHOST:-localhost}"
+export AS3_SVRKEY="${AS3_SVRKEY:-4241}"
+
+# The server reads .serverkey before command-line/environment config and exits
+# if the file is missing. In Docker, keep the value configurable by env.
+write_serverkey() {
+    if [ ! -f .serverkey ]; then
+        printf 'svrkey=%s\n' "${AS3_SVRKEY}" > .serverkey
+    fi
+}
 
 # Wait for MySQL to be ready
 wait_for_mysql() {
@@ -141,6 +150,7 @@ case "${1:-start}" in
     start)
         wait_for_mysql
         init_database
+        write_serverkey
         start_server
         ;;
     create_account)
