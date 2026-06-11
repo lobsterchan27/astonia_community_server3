@@ -23,6 +23,9 @@ docker compose up -d
 # View logs
 docker compose logs -f server
 
+# Probe the game socket latency path used by browser gateway work
+python3 scripts/latency_probe.py --host 127.0.0.1 --ports 5556 --samples 10
+
 # Create an account and character
 docker exec astonia3-server /entrypoint.sh create_account your@email.com yourpassword
 docker exec astonia3-server /entrypoint.sh create_character 1 YourCharName MWG
@@ -104,6 +107,9 @@ docker compose down
 # View logs
 docker compose logs -f server
 
+# Measure TCP connect and first server frame timing
+python3 scripts/latency_probe.py --host 127.0.0.1 --ports 5556 --samples 10
+
 # Create account
 docker exec astonia3-server /entrypoint.sh create_account <email> <password>
 
@@ -126,6 +132,27 @@ Use the Astonia client (moac) to connect:
 ```bash
 bin/moac -u<CharacterName> -p<password> -d<server_ip> -v3
 ```
+
+## Latency Baseline Probe
+
+After `docker compose up -d`, run:
+
+```bash
+python3 scripts/latency_probe.py --host 127.0.0.1 --ports 5556 --samples 10
+```
+
+The probe opens the same TCP game port that a browser gateway uses, reads the
+first Astonia server frame, and reports stable key/value metrics for
+before/after comparison:
+
+- `connect_ms`: TCP connection setup time.
+- `first_frame_ms`: time from connected socket to the first complete server
+  frame. For a fresh connection this measures the accept-to-next-tick flush
+  path.
+- `total_ms`: TCP connect plus first frame.
+
+Use `--ports 5556-5590` to sample every compose-exposed game port, or
+`--format jsonl` for machine-readable output.
 
 ## Architecture
 

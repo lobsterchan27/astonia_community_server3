@@ -10,6 +10,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <net/if.h>
 #include <netdb.h>
 #include <errno.h>
@@ -26,6 +27,20 @@
 #include "io.h"
 
 struct player **player;
+
+static void set_player_socket_options(int sock, struct sockaddr_in *addr) {
+    int one = 1;
+
+    if (setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (const char *)&one, sizeof(one))) {
+        elog("setsockopt TCP_NODELAY failed for player socket %d from %d.%d.%d.%d: %s",
+             sock,
+             (addr->sin_addr.s_addr >> 0) & 255,
+             (addr->sin_addr.s_addr >> 8) & 255,
+             (addr->sin_addr.s_addr >> 16) & 255,
+             (addr->sin_addr.s_addr >> 24) & 255,
+             strerror(errno));
+    }
+}
 
 void *my_zlib_malloc(void *dummy, unsigned int cnt, unsigned int size) {
     return xmalloc(cnt * size, IM_ZLIB);
@@ -47,7 +62,7 @@ void exit_player(int nr) {
 
 /* Process a new connection by finding, initializing and connecting a player entry to a new socket */
 static void new_player(int sock) {
-    int n, nsock, len = sizeof(struct sockaddr_in); //,one=1; //,zero=0;
+    int n, nsock, len = sizeof(struct sockaddr_in); //,zero=0;
     u_long one = 1;
     struct sockaddr_in addr;
     char buf[16];
@@ -56,8 +71,7 @@ static void new_player(int sock) {
     if (nsock == -1) return;
 
     ioctl(nsock, FIONBIO, (u_long *)&one); // non-blocking mode
-
-    //setsockopt(nsock,IPPROTO_TCP,TCP_NODELAY,(const char *)&one,sizeof(int));
+    set_player_socket_options(nsock, &addr);
     //setsockopt(nsock,SOL_SOCKET,SO_LINGER,(const char *)&zero,sizeof(int));
     //setsockopt(nsock,SOL_SOCKET,SO_KEEPALIVE,(const char *)&one,sizeof(int));
 
