@@ -23,6 +23,8 @@ export AS3_DBPASS="${AS3_DBPASS:-astonia}"
 export AS3_DBNAME="${AS3_DBNAME:-merc}"
 export AS3_CHATHOST="${AS3_CHATHOST:-localhost}"
 export AS3_SVRKEY="${AS3_SVRKEY:-4241}"
+DEFAULT_AREA="${DEFAULT_AREA:-1}"
+DEFAULT_MIRROR="${DEFAULT_MIRROR:-1}"
 
 # The server reads .serverkey before command-line/environment config and exits
 # if the file is missing. In Docker, keep the value configurable by env.
@@ -84,6 +86,41 @@ init_database() {
 }
 
 # Start the server processes
+start_area_server() {
+    local area="$1"
+    local mirror="${2:-1}"
+
+    echo "Starting area $area mirror $mirror..."
+    ./server -e -a "$area" -m "$mirror" &
+}
+
+area_server_running() {
+    local area="$1"
+    local mirror="$2"
+
+    ps -eo args= | awk -v area="$area" -v mirror="$mirror" '
+        $1 == "./server" {
+            saw_area = 0
+            saw_mirror = 0
+            for (i = 1; i <= NF; i++) {
+                if ($i == "-a" && i < NF && $(i + 1) == area) saw_area = 1
+                if ($i == "-m" && i < NF && $(i + 1) == mirror) saw_mirror = 1
+            }
+            if (saw_area && saw_mirror) found = 1
+        }
+        END { exit found ? 0 : 1 }
+    '
+}
+
+ensure_default_area() {
+    if area_server_running "$DEFAULT_AREA" "$DEFAULT_MIRROR"; then
+        return 0
+    fi
+
+    echo "WARNING: default area $DEFAULT_AREA mirror $DEFAULT_MIRROR died, restarting..."
+    start_area_server "$DEFAULT_AREA" "$DEFAULT_MIRROR"
+}
+
 start_server() {
     echo "Starting Astonia Community Server (v3)..."
     
@@ -99,8 +136,7 @@ start_server() {
     # Start all area servers (no -d flag, run in background with &)
     # -e flag tells server to read config from environment variables
     for area in $AREAS; do
-        echo "Starting area $area..."
-        ./server -e -a $area &
+        start_area_server "$area" 1
         sleep 0.5
     done
     
@@ -114,6 +150,8 @@ start_server() {
             echo "WARNING: chatserver died, restarting..."
             ./chatserver &
         fi
+
+        ensure_default_area
         
         # Count running server processes
         local running
